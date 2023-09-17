@@ -1,0 +1,105 @@
+name: Fetch SDKs
+on: workflow_dispatch
+permissions:
+  contents: write
+
+jobs:
+
+  get-movian:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Download archive
+      run: wget --no-check-certificate https://movian.tv/static/ps3dev.tar.gz -O ./ps3dev.tar.gz
+    - name: Repackage archive
+      run: |
+        mkdir ./extracted && cd ./extracted
+        tar -xzf ../ps3dev.tar.gz
+        tar --owner=0 --group=0 -zcf ../ps3dev-movian-xenial.tar.gz *
+    - name: Upload SDK
+      uses: actions/upload-artifact@v2
+      with:
+        name: release-artifact
+        path: ./ps3dev-movian-xenial.tar.gz
+ 
+  get-xerpi:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Download archive
+      run: |
+        wget --no-check-certificate https://raw.githubusercontent.com/Andrew-J-Larson-Alt/mediafire-direct/main/!-bash-script/mediafire-direct.sh -O ./mediafire.sh && chmod +x ./mediafire.sh
+        wget --no-check-certificate $(./mediafire.sh -n https://www.mediafire.com/file/yazdz4sz7sbqe2m/ps3toolchain_and_psl1ght_v2_linux_64.7z/file) -O ./ps3dev.7z
+    - name: Repackage archive
+      run: |
+        mkdir ./ps3dev-temp && cd ./ps3dev-temp
+        7z x ../ps3dev.7z
+        tar --owner=0 --group=0 -zcf ../ps3dev-xerpi-xenial.tar.gz *
+    - name: Upload SDK
+      uses: actions/upload-artifact@v2
+      with:
+        name: release-artifact
+        path: ./ps3dev-xerpi-xenial.tar.gz
+
+  get-cobra:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Download archive
+      run: |
+        wget --no-check-certificate https://raw.githubusercontent.com/Andrew-J-Larson-Alt/mediafire-direct/main/!-bash-script/mediafire-direct.sh -O ./mediafire.sh && chmod +x ./mediafire.sh
+        wget --no-check-certificate $(./mediafire.sh -n https://www.mediafire.com/file/s88ycf85d0vnshd/PSDK3v2_COBRA.rar/file) -O ./psdk.rar
+    - name: Repackage archive
+      run: |
+        sudo apt -y install unar
+        unar -D ./psdk.rar
+        rm -r PSDK3v2/libraries-src PSDK3v2/project
+        tar --owner=0 --group=0 -zcf ./psdk3-cobra-windows.tar.gz PSDK3v2
+    - name: Upload SDK
+      uses: actions/upload-artifact@v2
+      with:
+        name: release-artifact
+        path: ./psdk3-cobra-windows.tar.gz
+
+  get-psdk:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Download archives
+      run: |
+        wget --no-check-certificate https://github.com/Estwald/PSDK3v2/raw/master/ps3dev.7z -O ./ps3dev.7z
+        wget --no-check-certificate https://github.com/Estwald/PSDK3v2/raw/master/MinGW.7z -O ./MinGW.7z
+        wget --no-check-certificate https://github.com/wargio/PSDK3v2/tarball/master -O ./psl1ght.tar.gz
+    - name: Repackage archives
+      run: |
+        mkdir ./PSDK3v2 && cd ./PSDK3v2
+        tar --wildcards -xzf ../psl1ght.tar.gz */psl1ght
+        7z x ../ps3dev.7z
+        7z x ../MinGW.7z
+        tar --owner=0 --group=0 -zcf ../psdk3-estwald-windows.tar.gz .
+    - name: Upload SDK
+      uses: actions/upload-artifact@v2
+      with:
+        name: release-artifact
+        path: ./psdk3-estwald-windows.tar.gz
+    
+
+  generate-release:
+    if: ${{ always() }}
+    needs: [get-movian, get-xerpi, get-cobra, get-psdk]
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Download all assets
+      uses: actions/download-artifact@v2
+      with:
+        name: release-artifact
+
+    - name: Get current date
+      id: fnames
+      run: |
+        echo "::set-output name=date::$(date +'%Y.%m.%d')"
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: "Mirrors (${{steps.fnames.outputs.date}})"
+        tag_name: "refs/tags/${{steps.fnames.outputs.date}}"
+        files: ./*.tar.gz
+        prerelease: false
